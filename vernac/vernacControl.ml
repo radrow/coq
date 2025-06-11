@@ -46,6 +46,7 @@ type 'state control_entry =
   | ControlTimeout of { remaining : float }
   | ControlFail of { st : 'state }
   | ControlSucceed of { st : 'state }
+  | ControlAssertOutput of { output : string; buffer : Buffer.t }
 
 type 'state control_entries = 'state control_entry list
 
@@ -197,6 +198,9 @@ let under_one_control ~loc ~with_local_state control f =
   | ControlTimeout {remaining} -> with_timeout ~timeout:remaining f
   | ControlFail {st} -> with_fail ~loc ~with_local_state st f
   | ControlSucceed {st} -> with_succeed ~with_local_state st f
+  | ControlAssertOutput {output; buffer} ->
+    let v = Topfmt.with_output_to_buffer buffer f () in
+    Some (ControlAssertOutput {output; buffer}, v)
 
 let rec under_control ~loc ~with_local_state controls ~noop f =
   match controls with
@@ -208,6 +212,10 @@ let rec under_control ~loc ~with_local_state controls ~noop f =
     | None -> [], noop
 
 let ignore_state = { with_local_state = fun _ f -> (), f () }
+
+let match_output exp got =
+  let simpl = Str.split (Str.regexp "[ \t\n]+") in
+  simpl exp = simpl got
 
 let rec after_last_phase ~loc = function
   | [] -> false
@@ -231,6 +239,20 @@ let rec after_last_phase ~loc = function
       | ControlTimeout _ -> noop
       | ControlFail _ -> CErrors.user_err Pp.(str "The command has not failed!")
       | ControlSucceed _ -> true
+      | ControlAssertOutput {output; buffer} ->
+        let s = Buffer.contents buffer in
+        Buffer.reset buffer;
+        if match_output output s then
+          true
+        else CErrors.user_err (
+            Pp.(
+              str "Outputs mismatch.\n" ++
+              str "Expected: \"\n" ++
+              str output ++
+              str "\"\n\nGot: \"\n" ++
+              str s ++
+              str "\""
+            ))
 
 (** A global default timeout, controlled by option "Set Default Timeout n".
     Use "Unset Default Timeout" to deactivate it. *)
@@ -269,5 +291,8 @@ let from_syntax_one : Vernacexpr.control_flag -> unit control_entry = function
     ControlTimeout { remaining = float_of_int timeout }
   | ControlFail -> ControlFail { st = () }
   | ControlSucceed -> ControlSucceed { st = () }
+  | ControlAssertOutput output ->
+    let buffer = Buffer.create 128 in
+    ControlAssertOutput { output; buffer }
 
 let from_syntax control = List.map from_syntax_one (add_default_timeout control)

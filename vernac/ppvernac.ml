@@ -1433,6 +1433,7 @@ let pr_control_flag (p : control_flag) =
     | ControlTimeout n -> keyword "Timeout " ++ int n
     | ControlFail -> keyword "Fail"
     | ControlSucceed -> keyword "Succeed"
+    | ControlAssertOutput s -> keyword "Outputs" ++ spc() ++ qs s
   in
   w ++ spc ()
 

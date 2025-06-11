@@ -113,6 +113,8 @@ GRAMMAR EXTEND Gram
         { add_control_flag ~loc ~flag:ControlFail c }
       | IDENT "Succeed"; c = vernac_control ->
         { add_control_flag ~loc ~flag:ControlSucceed c }
+      | IDENT "Assert"; IDENT "Output"; out = STRING; c = vernac_control ->
+        { add_control_flag ~loc ~flag:(ControlAssertOutput out) c }
       | v = decorated_vernac ->
         { let (attrs, expr) = v in CAst.make ~loc { control = []; attrs; expr = expr } } ]
     ]
